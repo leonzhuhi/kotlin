@@ -70,7 +70,7 @@ abstract class AbstractPerformanceProjectsTest : UsefulTestCase() {
                 assertTrue("kotlin project has been not imported properly", perfHighlightFile.isNotEmpty())
             }
         } finally {
-            myApplication.closeProject(project)
+            closeProject(project)
         }
     }
 
@@ -79,8 +79,8 @@ abstract class AbstractPerformanceProjectsTest : UsefulTestCase() {
         RunAll(
             ThrowableRunnable { super.tearDown() },
             ThrowableRunnable {
-                myProject?.let {
-                    myApplication.closeProject(it)
+                myProject?.let { project ->
+                    closeProject(project)
                     myProject = null
                 }
             }).run()
@@ -90,6 +90,8 @@ abstract class AbstractPerformanceProjectsTest : UsefulTestCase() {
         val lastIndexOf = fileName.lastIndexOf('/')
         return if (lastIndexOf >= 0) fileName.substring(lastIndexOf + 1) else fileName
     }
+
+    private fun closeProject(project: Project) = myApplication.closeProject(project)
 
     protected fun perfOpenProject(
         stats: Stats,
@@ -125,7 +127,7 @@ abstract class AbstractPerformanceProjectsTest : UsefulTestCase() {
 
                     // close all project but last - we're going to return and use it further
                     if (counter < warmUpIterations + iterations - 1) {
-                        myApplication.closeProject(project)
+                        closeProject(project)
                     }
                     counter++
                 }
@@ -601,7 +603,14 @@ abstract class AbstractPerformanceProjectsTest : UsefulTestCase() {
                     tearDown {
                         highlightInfos = it.value ?: emptyList()
                         commitAllDocuments()
-                        FileEditorManager.getInstance(project).closeFile(it.setUpValue!!.psiFile.virtualFile)
+                        it.setUpValue?.let { editorFile ->
+                            val editorFactory = EditorFactory.getInstance()
+                            editorFactory.getEditors(editorFile.document).forEach { editor ->
+                                editorFactory.releaseEditor(editor)
+                            }
+                            val fileEditorManager = FileEditorManager.getInstance(project)
+                            fileEditorManager.closeFile(editorFile.psiFile.virtualFile)
+                        }
                         PsiManager.getInstance(project).dropPsiCaches()
                     }
                     profilerEnabled(!isWarmUp)
